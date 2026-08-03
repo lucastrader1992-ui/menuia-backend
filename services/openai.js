@@ -2,6 +2,12 @@ const { GoogleGenerativeAI } = require('@google/generative-ai');
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 
+function cleanJsonResponse(text) {
+  let clean = text.replace(/```json/g, '').replace(/```/g, '').trim();
+  clean = clean.replace(/^\s+|\s+$/g, '');
+  return clean;
+}
+
 async function generateContent(photoDescription, restaurantName, dishName, price, tone) {
   const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
 
@@ -23,16 +29,11 @@ Retorne APENAS um JSON válido no formato:
 
   const result = await model.generateContent(prompt);
   const text = result.response.text();
-
-  // Tenta extrair JSON da resposta
+  
   try {
-    // Remove markdown code blocks se existirem
-    const cleanText = text.replace(/```json
-?/g, '').replace(/```
-?/g, '').trim();
+    const cleanText = cleanJsonResponse(text);
     return JSON.parse(cleanText);
   } catch (e) {
-    // Fallback: retorna o texto como está
     return {
       instagram: text,
       whatsapp: text.substring(0, 200),
@@ -59,11 +60,9 @@ Retorne JSON:
 
   const result = await model.generateContent(prompt);
   const text = result.response.text();
-
+  
   try {
-    const cleanText = text.replace(/```json
-?/g, '').replace(/```
-?/g, '').trim();
+    const cleanText = cleanJsonResponse(text);
     return JSON.parse(cleanText);
   } catch (e) {
     return { title: 'Promoção do Dia', description: text, price: '', whatsappText: text };
