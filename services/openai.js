@@ -1,7 +1,10 @@
-const OpenAI = require('openai');
-const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+const { GoogleGenerativeAI } = require('@google/generative-ai');
+
+const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 
 async function generateContent(photoDescription, restaurantName, dishName, price, tone) {
+  const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
+
   const prompt = `Você é um especialista em marketing digital para restaurantes no Brasil.
 Crie 3 textos diferentes para divulgar este prato:
 
@@ -18,16 +21,18 @@ Retorne APENAS um JSON válido no formato:
   "short": "texto curto de até 100 caracteres para story/legenda"
 }`;
 
-  const completion = await openai.chat.completions.create({
-    model: 'gpt-4o-mini',
-    messages: [{ role: 'user', content: prompt }],
-    temperature: 0.8,
-  });
+  const result = await model.generateContent(prompt);
+  const text = result.response.text();
 
-  const text = completion.choices[0].message.content;
+  // Tenta extrair JSON da resposta
   try {
-    return JSON.parse(text);
+    // Remove markdown code blocks se existirem
+    const cleanText = text.replace(/```json
+?/g, '').replace(/```
+?/g, '').trim();
+    return JSON.parse(cleanText);
   } catch (e) {
+    // Fallback: retorna o texto como está
     return {
       instagram: text,
       whatsapp: text.substring(0, 200),
@@ -37,6 +42,8 @@ Retorne APENAS um JSON válido no formato:
 }
 
 async function generatePromotionIdea(inventory, dayOfWeek, weather) {
+  const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
+
   const prompt = `Crie uma ideia de promoção para um restaurante hoje.
 Dia: ${dayOfWeek}
 Clima: ${weather || 'ensolarado'}
@@ -50,15 +57,14 @@ Retorne JSON:
   "whatsappText": "texto pronto para mandar no WhatsApp"
 }`;
 
-  const completion = await openai.chat.completions.create({
-    model: 'gpt-4o-mini',
-    messages: [{ role: 'user', content: prompt }],
-    temperature: 0.9,
-  });
+  const result = await model.generateContent(prompt);
+  const text = result.response.text();
 
-  const text = completion.choices[0].message.content;
   try {
-    return JSON.parse(text);
+    const cleanText = text.replace(/```json
+?/g, '').replace(/```
+?/g, '').trim();
+    return JSON.parse(cleanText);
   } catch (e) {
     return { title: 'Promoção do Dia', description: text, price: '', whatsappText: text };
   }
