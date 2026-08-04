@@ -1,49 +1,75 @@
 const express = require('express');
-const bcrypt = require('bcryptjs');
-const jwt = require('jsonwebtoken');
-const { db } = require('../services/firebase');
 const router = express.Router();
+const admin = require('firebase-admin');
+const { db } = require('../services/firebase');
 
+// POST /api/auth/register
 router.post('/register', async (req, res) => {
   try {
     const { email, password, restaurantName, phone } = req.body;
-    const userRef = db.collection('users').doc();
-    const hashedPassword = await bcrypt.hash(password, 10);
 
-    await userRef.set({
+    // Cria usuário no Firebase Auth
+    const userRecord = await admin.auth().createUser({
       email,
-      password: hashedPassword,
-      restaurantName,
-      phone,
-      plan: 'free',
-      createdAt: new Date(),
-      generationsUsed: 0,
-      generationsLimit: 5
+      password,
+      displayName: restaurantName
     });
 
-    const token = jwt.sign({ uid: userRef.id }, process.env.JWT_SECRET, { expiresIn: '7d' });
-    res.json({ token, uid: userRef.id, restaurantName, plan: 'free' });
+    // Salva dados no Firestore
+    await db.collection('users').doc(userRecord.uid).set({
+      email,
+      restaurantName,
+      phone: phone || '',
+      plan: 'basic',           // Todo novo usuário começa no plano básico
+      generationsUsed: 0,
+      generationsLimit: 5,
+      videosGeneratedThisMonth: 0,
+      lastVideoReset: '',
+      createdAt: new Date()
+    });
+
+    // Gera token
+    const token = await admin.auth().createCustomToken(userRecord.uid);
+
+    res.json({
+      token,
+      uid: userRecord.uid,
+      email,
+      restaurantName,
+      plan: 'basic'
+    });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    console.error('Erro no register:', err);
+    res.status(400).json({ error: err.message });
   }
 });
 
+// POST /api/auth/login
 router.post('/login', async (req, res) => {
   try {
     const { email, password } = req.body;
-    const snapshot = await db.collection('users').where('email', '==', email).limit(1).get();
-    if (snapshot.empty) return res.status(400).json({ error: 'Usuário não encontrado' });
 
-    const userDoc = snapshot.docs[0];
-    const user = userDoc.data();
+    // Busca usuário no Firebase Auth pelo email
+    const userRecord = await admin.auth().getUserByEmail(email);
 
-    const valid = await bcrypt.compare(password, user.password);
-    if (!valid) return res.status(400).json({ error: 'Senha incorreta' });
+    // Busca dados adicionais no Firestore
+    const userDoc = await db.collection('users').doc(userRecord.uid).get();
+    const userData = userDoc.exists ? userDoc.data() : {};
 
-    const token = jwt.sign({ uid: userDoc.id }, process.env.JWT_SECRET, { expiresIn: '7d' });
-    res.json({ token, uid: userDoc.id, restaurantName: user.restaurantName, plan: user.plan });
+    // Gera token
+    const token = await admin.auth().createCustomToken(userRecord.uid);
+
+    res.json({
+      token,
+      uid: userRecord.uid,
+      email: userRecord.email,
+      restaurantName: userData.restaurantName || '',
+      plan: userData.plan || 'basic',
+      generationsUsed: userData.generationsUsed || 0
+    });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    console.error('Erro no login:', err);
+    res.status(401).json({ error: 'Email ou senha inválidos' });
   }
 });
 
