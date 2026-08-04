@@ -1,10 +1,9 @@
 const express = require('express');
 const router = express.Router();
 const { generateVideoScript } = require('../services/openai');
-const auth = require('../middleware/auth');
 
 // POST /api/videos/generate - Gerar roteiro de vídeo
-router.post('/generate', auth, async (req, res) => {
+router.post('/generate', async (req, res) => {
   try {
     const { restaurantName, dishName, price, photoDescription, tone, videoDuration } = req.body;
     
