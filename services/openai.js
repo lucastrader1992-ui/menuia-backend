@@ -9,7 +9,7 @@ function cleanJsonResponse(text) {
 }
 
 async function generateContent(photoDescription, restaurantName, dishName, price, tone) {
-  const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' });
+  const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
 
   const prompt = `Você é um especialista em marketing digital para restaurantes no Brasil.
 Crie 3 textos diferentes para divulgar este prato:
@@ -43,7 +43,7 @@ Retorne APENAS um JSON válido no formato:
 }
 
 async function generatePromotionIdea(inventory, dayOfWeek, weather) {
-  const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' });
+  const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
 
   const prompt = `Crie uma ideia de promoção para um restaurante hoje.
 Dia: ${dayOfWeek}
@@ -70,7 +70,7 @@ Retorne JSON:
 }
 
 async function generateVideoScript(photoDescription, restaurantName, dishName, price, tone, videoDuration) {
-  const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' });
+  const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
 
   const prompt = `Você é um diretor de criação especializado em vídeos para Instagram Reels de restaurantes no Brasil.
 Crie um roteiro completo para um vídeo de ${videoDuration} segundos divulgando este prato:
@@ -121,7 +121,7 @@ Retorne APENAS um JSON válido no formato:
       captions: [{ start: '0.0', end: '15.0', text: dishName }],
       hashtags: '#food #restaurante #comida',
       musicSuggestion: { style: 'Bossa Nova Upbeat', mood: 'Alegre', youtubeLink: 'youtube.com/audiolibrary/music' },
-      voiceover: `Venha experimentar o ${dishName} no ${restauranteName}!`,
+      voiceover: `Venha experimentar o ${dishName} no ${restaurantName}!`,
       callToAction: 'Siga @restaurante e reserve sua mesa!',
       canvaTemplate: 'canva.com/templates/search/reels-food/'
     };
