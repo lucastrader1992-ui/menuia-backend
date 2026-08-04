@@ -2,18 +2,33 @@ const jwt = require('jsonwebtoken');
 const { db } = require('../services/firebase');
 
 async function verifyToken(req, res, next) {
-  const token = req.headers.authorization?.split(' ')[1];
-  if (!token) return res.status(401).json({ error: 'Token não fornecido' });
-
   try {
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    const userDoc = await db.collection('users').doc(decoded.uid).get();
-    if (!userDoc.exists) return res.status(401).json({ error: 'Usuário não encontrado' });
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return res.status(401).json({ error: 'Token nao fornecido' });
+    }
 
-    req.user = { uid: decoded.uid, ...userDoc.data() };
+    const token = authHeader.split(' ')[1];
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+
+    // Busca dados do usuario no Firestore
+    const userDoc = await db.collection('users').doc(decoded.uid).get();
+    const userData = userDoc.exists ? userDoc.data() : {};
+
+    req.user = {
+      uid: decoded.uid,
+      email: userData.email || '',
+      restaurantName: userData.restaurantName || '',
+      plan: userData.plan || 'basic',
+      generationsUsed: userData.generationsUsed || 0,
+      videosGeneratedThisMonth: userData.videosGeneratedThisMonth || 0,
+      lastVideoReset: userData.lastVideoReset || ''
+    };
+
     next();
   } catch (err) {
-    res.status(401).json({ error: 'Token inválido' });
+    console.error('Erro no auth:', err);
+    res.status(401).json({ error: 'Token invalido ou expirado' });
   }
 }
 
