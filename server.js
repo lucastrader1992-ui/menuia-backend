@@ -15,7 +15,6 @@ app.use(express.json());
 // Rotas
 app.use('/api/auth', require('./routes/auth'));
 app.use('/api/content', require('./routes/content'));
-app.use('/api/promotions', require('./routes/promotions'));
 app.use('/api/videos', require('./routes/videos'));
 
 // Health check
