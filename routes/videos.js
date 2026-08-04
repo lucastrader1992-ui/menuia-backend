@@ -1,7 +1,8 @@
 const express = require('express');
 const router = express.Router();
-const { generateVideoScript } = require('../services/openai');
+const jwt = require('jsonwebtoken');
 const { db } = require('../services/firebase');
+const { generateVideoScript } = require('../services/openai');
 
 // Helper: verifica quota de videos do usuario
 async function checkVideoQuota(user) {
@@ -32,16 +33,17 @@ async function checkVideoQuota(user) {
   };
 }
 
+// POST /api/videos/generate
 router.post('/generate', async (req, res) => {
   try {
+    // Verifica token JWT
     const authHeader = req.headers.authorization;
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
       return res.status(401).json({ error: 'Nao autorizado' });
     }
 
     const token = authHeader.split(' ')[1];
-    const admin = require('firebase-admin');
-    const decoded = await admin.auth().verifyIdToken(token);
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
     
     const userDoc = await db.collection('users').doc(decoded.uid).get();
     const userData = userDoc.exists ? userDoc.data() : {};
@@ -83,6 +85,7 @@ router.post('/generate', async (req, res) => {
   }
 });
 
+// GET /api/videos/quota
 router.get('/quota', async (req, res) => {
   try {
     const authHeader = req.headers.authorization;
@@ -91,8 +94,7 @@ router.get('/quota', async (req, res) => {
     }
 
     const token = authHeader.split(' ')[1];
-    const admin = require('firebase-admin');
-    const decoded = await admin.auth().verifyIdToken(token);
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
     
     const userDoc = await db.collection('users').doc(decoded.uid).get();
     const userData = userDoc.exists ? userDoc.data() : {};
