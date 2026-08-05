@@ -33,10 +33,9 @@ async function checkVideoQuota(user) {
   };
 }
 
-// POST /api/videos/generate
+// POST /api/videos/generate - Gerar roteiro de video
 router.post('/generate', async (req, res) => {
   try {
-    // Verifica token JWT
     const authHeader = req.headers.authorization;
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
       return res.status(401).json({ error: 'Nao autorizado' });
@@ -85,7 +84,7 @@ router.post('/generate', async (req, res) => {
   }
 });
 
-// GET /api/videos/quota
+// GET /api/videos/quota - Ver quota restante
 router.get('/quota', async (req, res) => {
   try {
     const authHeader = req.headers.authorization;
@@ -104,6 +103,48 @@ router.get('/quota', async (req, res) => {
     res.json(quota);
   } catch (err) {
     res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/videos/render - Renderizar video no servidor (Pro/Premium)
+router.post('/render', async (req, res) => {
+  try {
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return res.status(401).json({ error: 'Nao autorizado' });
+    }
+
+    const token = authHeader.split(' ')[1];
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    
+    const userDoc = await db.collection('users').doc(decoded.uid).get();
+    const userData = userDoc.exists ? userDoc.data() : {};
+    const user = { uid: decoded.uid, ...userData };
+
+    if (user.plan !== 'pro' && user.plan !== 'premium') {
+      return res.status(403).json({ error: 'Renderizacao de video no servidor disponivel apenas para planos Pro e Premium' });
+    }
+
+    const quota = await checkVideoQuota(user);
+    if (!quota.canGenerate) {
+      return res.status(403).json({ error: `Limite de ${quota.limit} videos/mes atingido.` });
+    }
+
+    const { imageBase64, dishName, price, restaurantName, texts } = req.body;
+
+    if (!imageBase64 || !dishName) {
+      return res.status(400).json({ error: 'Imagem e nome do prato sao obrigatorios' });
+    }
+
+    // Renderizacao no servidor em desenvolvimento
+    res.status(501).json({ 
+      error: 'Renderizacao no servidor em desenvolvimento. Use a versao do navegador (funciona em qualquer dispositivo).',
+      fallback: true
+    });
+
+  } catch (error) {
+    console.error('Erro ao renderizar video:', error);
+    res.status(500).json({ error: 'Erro ao renderizar video no servidor' });
   }
 });
 
