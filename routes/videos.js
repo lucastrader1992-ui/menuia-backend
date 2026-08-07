@@ -4,14 +4,19 @@ const jwt = require('jsonwebtoken');
 const { db } = require('../services/firebase');
 const { generateVideoScript } = require('../services/openai');
 
-// Helper: verifica quota de videos do usuario
+// ============================================
+// CONFIGURAÇÃO: 20 vídeos/mês para TODOS os planos
+// ============================================
+const VIDEO_LIMIT_PER_MONTH = 20;
+
+// Helper: verifica quota de vídeos do usuário
 async function checkVideoQuota(user) {
   const now = new Date();
   const currentMonth = `${now.getFullYear()}-${now.getMonth() + 1}`;
   const lastReset = user.lastVideoReset || '';
-  
+
   let videosUsed = user.videosGeneratedThisMonth || 0;
-  
+
   if (lastReset !== currentMonth) {
     await db.collection('users').doc(user.uid).update({
       videosGeneratedThisMonth: 0,
@@ -19,21 +24,16 @@ async function checkVideoQuota(user) {
     });
     videosUsed = 0;
   }
-  
-  const limits = { basic: 0, pro: 8, premium: 20 };
-  const plan = user.plan || 'basic';
-  const limit = limits[plan] || 0;
-  
+
   return {
-    canGenerate: limit > 0 && videosUsed < limit,
-    limit,
+    canGenerate: videosUsed < VIDEO_LIMIT_PER_MONTH,
+    limit: VIDEO_LIMIT_PER_MONTH,
     used: videosUsed,
-    remaining: Math.max(0, limit - videosUsed),
-    plan
+    remaining: Math.max(0, VIDEO_LIMIT_PER_MONTH - videosUsed)
   };
 }
 
-// POST /api/videos/generate - Gerar roteiro de video
+// POST /api/videos/generate - Gerar roteiro de vídeo
 router.post('/generate', async (req, res) => {
   try {
     const authHeader = req.headers.authorization;
@@ -43,18 +43,17 @@ router.post('/generate', async (req, res) => {
 
     const token = authHeader.split(' ')[1];
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    
+
     const userDoc = await db.collection('users').doc(decoded.uid).get();
     const userData = userDoc.exists ? userDoc.data() : {};
     const user = { uid: decoded.uid, ...userData };
 
     const quota = await checkVideoQuota(user);
-    
+
     if (!quota.canGenerate) {
       return res.status(403).json({ 
-        error: quota.plan === 'basic' 
-          ? 'Videos disponiveis apenas no Plano Pro ou Premium. Faca upgrade!' 
-          : `Limite de ${quota.limit} videos/mes atingido.`
+        error: `Limite de ${VIDEO_LIMIT_PER_MONTH} videos/mes atingido.`,
+        quota
       });
     }
 
@@ -94,7 +93,7 @@ router.get('/quota', async (req, res) => {
 
     const token = authHeader.split(' ')[1];
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    
+
     const userDoc = await db.collection('users').doc(decoded.uid).get();
     const userData = userDoc.exists ? userDoc.data() : {};
     const user = { uid: decoded.uid, ...userData };
@@ -106,7 +105,8 @@ router.get('/quota', async (req, res) => {
   }
 });
 
-// POST /api/videos/render - Renderizar video no servidor (Pro/Premium)
+// POST /api/videos/render - Renderizar vídeo no servidor
+// TODO: Implementar quando tiver conta no Renderly/Shotstack
 router.post('/render', async (req, res) => {
   try {
     const authHeader = req.headers.authorization;
@@ -116,18 +116,17 @@ router.post('/render', async (req, res) => {
 
     const token = authHeader.split(' ')[1];
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    
+
     const userDoc = await db.collection('users').doc(decoded.uid).get();
     const userData = userDoc.exists ? userDoc.data() : {};
     const user = { uid: decoded.uid, ...userData };
 
-    if (user.plan !== 'pro' && user.plan !== 'premium') {
-      return res.status(403).json({ error: 'Renderizacao de video no servidor disponivel apenas para planos Pro e Premium' });
-    }
-
     const quota = await checkVideoQuota(user);
     if (!quota.canGenerate) {
-      return res.status(403).json({ error: `Limite de ${quota.limit} videos/mes atingido.` });
+      return res.status(403).json({ 
+        error: `Limite de ${VIDEO_LIMIT_PER_MONTH} videos/mes atingido.`,
+        quota
+      });
     }
 
     const { imageBase64, dishName, price, restaurantName, texts } = req.body;
@@ -136,10 +135,21 @@ router.post('/render', async (req, res) => {
       return res.status(400).json({ error: 'Imagem e nome do prato sao obrigatorios' });
     }
 
-    // Renderizacao no servidor em desenvolvimento
+    // ============================================
+    // FUTURO: Implementar chamada à API Renderly/Shotstack aqui
+    // ============================================
+    // 1. Fazer upload da imagem para Firebase Storage
+    // 2. Montar template JSON com foto + textos
+    // 3. Enviar para Renderly/Shotstack
+    // 4. Receber URL do MP4
+    // 5. Atualizar quota
+    // 6. Retornar URL para o frontend
+    // ============================================
+
     res.status(501).json({ 
-      error: 'Renderizacao no servidor em desenvolvimento. Use a versao do navegador (funciona em qualquer dispositivo).',
-      fallback: true
+      error: 'Renderizacao no servidor em desenvolvimento. Use a versao do navegador.',
+      fallback: true,
+      quota
     });
 
   } catch (error) {
