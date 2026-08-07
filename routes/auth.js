@@ -1,57 +1,104 @@
 const express = require('express');
+const router = express.Router();
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const { db } = require('../services/firebase');
-const router = express.Router();
 
+// POST /api/auth/register
 router.post('/register', async (req, res) => {
   try {
-    const { email, password, restaurantName, phone } = req.body;
-    const userRef = db.collection('users').doc();
+    const { email, password, restaurantName } = req.body;
+
+    if (!email || !password || !restaurantName) {
+      return res.status(400).json({ error: 'Email, senha e nome do restaurante sao obrigatorios' });
+    }
+
+    // Verifica se email já existe
+    const existing = await db.collection('users').where('email', '==', email).get();
+    if (!existing.empty) {
+      return res.status(400).json({ error: 'Email ja cadastrado' });
+    }
+
+    // Hash da senha
     const hashedPassword = await bcrypt.hash(password, 10);
 
+    // Cria usuário com plano "unico" (plano único R$ 100)
+    const userRef = db.collection('users').doc();
     await userRef.set({
+      uid: userRef.id,
       email,
       password: hashedPassword,
       restaurantName,
-      phone: phone || '',
-      plan: 'basic',              // Novo usuario comeca no plano Basico
-      createdAt: new Date(),
-      generationsUsed: 0,
-      generationsLimit: 5,
+      plan: 'unico',              // ← Plano único R$ 100/mês
+      contentsGeneratedThisMonth: 0,
       videosGeneratedThisMonth: 0,
-      lastVideoReset: ''
+      lastContentReset: '',
+      lastVideoReset: '',
+      createdAt: new Date().toISOString()
     });
 
-    const token = jwt.sign({ uid: userRef.id }, process.env.JWT_SECRET, { expiresIn: '7d' });
-    res.json({ token, uid: userRef.id, restaurantName, plan: 'basic' });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
+    // Gera token JWT
+    const token = jwt.sign(
+      { uid: userRef.id, email, restaurantName },
+      process.env.JWT_SECRET,
+      { expiresIn: '24h' }
+    );
+
+    res.status(201).json({
+      token,
+      user: {
+        uid: userRef.id,
+        email,
+        restaurantName,
+        plan: 'unico'
+      }
+    });
+  } catch (error) {
+    console.error('Erro no cadastro:', error);
+    res.status(500).json({ error: 'Erro ao criar conta' });
   }
 });
 
+// POST /api/auth/login
 router.post('/login', async (req, res) => {
   try {
     const { email, password } = req.body;
-    const snapshot = await db.collection('users').where('email', '==', email).limit(1).get();
-    if (snapshot.empty) return res.status(400).json({ error: 'Usuario nao encontrado' });
 
-    const userDoc = snapshot.docs[0];
-    const user = userDoc.data();
+    if (!email || !password) {
+      return res.status(400).json({ error: 'Email e senha sao obrigatorios' });
+    }
 
-    const valid = await bcrypt.compare(password, user.password);
-    if (!valid) return res.status(400).json({ error: 'Senha incorreta' });
+    const userSnapshot = await db.collection('users').where('email', '==', email).get();
+    if (userSnapshot.empty) {
+      return res.status(401).json({ error: 'Email ou senha incorretos' });
+    }
 
-    const token = jwt.sign({ uid: userDoc.id }, process.env.JWT_SECRET, { expiresIn: '7d' });
-    res.json({ 
-      token, 
-      uid: userDoc.id, 
-      restaurantName: user.restaurantName, 
-      plan: user.plan || 'basic',
-      generationsUsed: user.generationsUsed || 0
+    const userDoc = userSnapshot.docs[0];
+    const userData = userDoc.data();
+
+    const isValid = await bcrypt.compare(password, userData.password);
+    if (!isValid) {
+      return res.status(401).json({ error: 'Email ou senha incorretos' });
+    }
+
+    const token = jwt.sign(
+      { uid: userData.uid, email, restaurantName: userData.restaurantName },
+      process.env.JWT_SECRET,
+      { expiresIn: '24h' }
+    );
+
+    res.json({
+      token,
+      user: {
+        uid: userData.uid,
+        email,
+        restaurantName: userData.restaurantName,
+        plan: userData.plan || 'unico'
+      }
     });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
+  } catch (error) {
+    console.error('Erro no login:', error);
+    res.status(500).json({ error: 'Erro ao fazer login' });
   }
 });
 
